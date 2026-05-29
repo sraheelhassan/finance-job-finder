@@ -10,6 +10,10 @@ st.markdown("Search remote & freelance finance and accounting jobs — no signup
 
 REMOTIVE_CATEGORIES = ["finance-legal"]
 
+REMOTIVE_SWEEP_TERMS = ["finance", "accounting", "accountant", "tax", "auditor", "cfo", "controller", "payroll", "bookkeeper", "treasury", "fp&a", "compliance"]
+
+ADZUNA_COUNTRIES = ["us", "gb", "au", "ca", "in"]
+
 FINANCE_KEYWORDS = [
     "finance", "financial", "accounting", "accountant", "cfo", "controller",
     "bookkeeper", "auditor", "tax", "payroll", "budget", "treasury", "analyst",
@@ -25,27 +29,27 @@ def is_finance_job(title):
 def fetch_remotive(search_term, limit):
     rows = []
     seen = set()
-    for cat in REMOTIVE_CATEGORIES:
-        params = {"limit": limit, "category": cat}
-        if search_term:
-            params["search"] = search_term
-        r = requests.get("https://remotive.com/api/remote-jobs", params=params, timeout=15)
-        r.raise_for_status()
-        for j in r.json().get("jobs", []):
-            if not is_finance_job(j.get("title", "")) and not search_term:
-                continue
-            if j.get("id") not in seen:
-                seen.add(j.get("id"))
-                rows.append({
-                    "Title": j.get("title", ""),
-                    "Company": j.get("company_name", ""),
-                    "Location": j.get("candidate_required_location") or "Worldwide",
-                    "Type": j.get("job_type", "").replace("_", " ").title(),
-                    "Salary": j.get("salary") or "",
-                    "Posted": j.get("publication_date", "")[:10],
-                    "Source": "Remotive",
-                    "Apply": j.get("url", ""),
-                })
+    terms = [search_term] if search_term else REMOTIVE_SWEEP_TERMS
+    for term in terms:
+        params = {"limit": limit, "category": "finance-legal", "search": term}
+        try:
+            r = requests.get("https://remotive.com/api/remote-jobs", params=params, timeout=15)
+            r.raise_for_status()
+            for j in r.json().get("jobs", []):
+                if j.get("id") not in seen:
+                    seen.add(j.get("id"))
+                    rows.append({
+                        "Title": j.get("title", ""),
+                        "Company": j.get("company_name", ""),
+                        "Location": j.get("candidate_required_location") or "Worldwide",
+                        "Type": j.get("job_type", "").replace("_", " ").title(),
+                        "Salary": j.get("salary") or "",
+                        "Posted": j.get("publication_date", "")[:10],
+                        "Source": "Remotive",
+                        "Apply": j.get("url", ""),
+                    })
+        except Exception:
+            pass
     return rows
 
 
@@ -146,30 +150,37 @@ def fetch_adzuna(search_term, limit):
     if not app_id or not app_key:
         return []
     what = f"remote {search_term}" if search_term else "remote finance accounting"
-    params = {
-        "app_id": app_id,
-        "app_key": app_key,
-        "results_per_page": min(limit, 50),
-        "what": what,
-        "full_time": 1,
-    }
-    r = requests.get("https://api.adzuna.com/v1/api/jobs/gb/search/1", params=params, timeout=15)
-    r.raise_for_status()
     rows = []
-    for j in r.json().get("results", []):
-        sal_min = j.get("salary_min")
-        sal_max = j.get("salary_max")
-        sal = f"${int(sal_min):,} – ${int(sal_max):,}" if sal_min and sal_max else (f"${int(sal_min):,}+" if sal_min else "")
-        rows.append({
-            "Title": j.get("title", ""),
-            "Company": j.get("company", {}).get("display_name", ""),
-            "Location": j.get("location", {}).get("display_name", "Worldwide"),
-            "Type": j.get("contract_time", "").replace("_", " ").title(),
-            "Salary": sal,
-            "Posted": str(j.get("created", ""))[:10],
-            "Source": "Adzuna",
-            "Apply": j.get("redirect_url", ""),
-        })
+    seen = set()
+    for country in ADZUNA_COUNTRIES:
+        try:
+            params = {
+                "app_id": app_id,
+                "app_key": app_key,
+                "results_per_page": min(limit, 50),
+                "what": what,
+            }
+            r = requests.get(f"https://api.adzuna.com/v1/api/jobs/{country}/search/1", params=params, timeout=15)
+            r.raise_for_status()
+            for j in r.json().get("results", []):
+                uid = j.get("id", j.get("redirect_url", ""))
+                if uid not in seen:
+                    seen.add(uid)
+                    sal_min = j.get("salary_min")
+                    sal_max = j.get("salary_max")
+                    sal = f"${int(sal_min):,} – ${int(sal_max):,}" if sal_min and sal_max else (f"${int(sal_min):,}+" if sal_min else "")
+                    rows.append({
+                        "Title": j.get("title", ""),
+                        "Company": j.get("company", {}).get("display_name", ""),
+                        "Location": j.get("location", {}).get("display_name", "Worldwide"),
+                        "Type": j.get("contract_time", "").replace("_", " ").title(),
+                        "Salary": sal,
+                        "Posted": str(j.get("created", ""))[:10],
+                        "Source": "Adzuna",
+                        "Apply": j.get("redirect_url", ""),
+                    })
+        except Exception:
+            pass
     return rows
 
 
@@ -202,7 +213,7 @@ with col_search:
 with col_btn:
     search_btn = st.button("Search Jobs", use_container_width=True)
 
-limit = 30
+limit = 50
 
 if search_btn:
     all_rows = []

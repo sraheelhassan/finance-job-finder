@@ -6,34 +6,41 @@ from datetime import datetime, timedelta, timezone
 st.set_page_config(page_title="Finance Job Finder", page_icon="💼", layout="wide")
 
 st.title("💼 Finance Job Finder")
-st.markdown("Search remote finance jobs across multiple boards — no signup required")
+st.markdown("Search remote finance & accounting jobs across multiple boards — no signup required")
 
 DAYS_OPTIONS = {"Any time": None, "Last 7 days": 7, "Last 14 days": 14, "Last 30 days": 30}
 
-REMOTIVE_CATEGORY = "finance-legal"
+REMOTIVE_CATEGORIES = ["finance-legal", "business"]
 
 
 def fetch_remotive(search_term, job_type, limit):
-    params = {"limit": limit, "category": REMOTIVE_CATEGORY}
-    if search_term:
-        params["search"] = search_term
-    r = requests.get("https://remotive.com/api/remote-jobs", params=params, timeout=15)
-    r.raise_for_status()
-    jobs = r.json().get("jobs", [])
-    if job_type:
-        jobs = [j for j in jobs if j.get("job_type") == job_type]
     rows = []
-    for j in jobs:
-        rows.append({
-            "Title": j.get("title", ""),
-            "Company": j.get("company_name", ""),
-            "Location": j.get("candidate_required_location") or "Worldwide",
-            "Type": j.get("job_type", "").replace("_", " ").title(),
-            "Salary": j.get("salary") or "",
-            "Posted": j.get("publication_date", "")[:10],
-            "Source": "Remotive",
-            "Apply": j.get("url", ""),
-        })
+    seen = set()
+    for cat in REMOTIVE_CATEGORIES:
+        params = {"limit": limit, "category": cat}
+        if search_term:
+            params["search"] = search_term
+        try:
+            r = requests.get("https://remotive.com/api/remote-jobs", params=params, timeout=15)
+            r.raise_for_status()
+            jobs = r.json().get("jobs", [])
+            if job_type:
+                jobs = [j for j in jobs if j.get("job_type") == job_type]
+            for j in jobs:
+                if j.get("id") not in seen:
+                    seen.add(j.get("id"))
+                    rows.append({
+                        "Title": j.get("title", ""),
+                        "Company": j.get("company_name", ""),
+                        "Location": j.get("candidate_required_location") or "Worldwide",
+                        "Type": j.get("job_type", "").replace("_", " ").title(),
+                        "Salary": j.get("salary") or "",
+                        "Posted": j.get("publication_date", "")[:10],
+                        "Source": "Remotive",
+                        "Apply": j.get("url", ""),
+                    })
+        except Exception:
+            pass
     return rows
 
 
@@ -45,6 +52,9 @@ def fetch_arbeitnow(search_term, limit):
     if search_term:
         kw = search_term.lower()
         jobs = [j for j in jobs if kw in j.get("title", "").lower() or kw in " ".join(j.get("tags", [])).lower()]
+    else:
+        finance_kw = ["finance", "accounting", "accountant", "cfo", "controller", "bookkeeper", "auditor", "tax"]
+        jobs = [j for j in jobs if any(kw in j.get("title", "").lower() or kw in " ".join(j.get("tags", [])).lower() for kw in finance_kw)]
     rows = []
     for j in jobs[:limit]:
         created = j.get("created_at", "")
@@ -63,16 +73,56 @@ def fetch_arbeitnow(search_term, limit):
 
 
 def fetch_jobicy(search_term, limit):
-    params = {"count": min(limit, 50), "industry": "finance"}
-    if search_term:
-        params["tag"] = search_term
-    r = requests.get("https://jobicy.com/api/v2/remote-jobs", params=params, timeout=15)
-    r.raise_for_status()
-    jobs = r.json().get("jobs", [])
     rows = []
-    for j in jobs:
-        sal_min = j.get("annualSalaryMin")
-        sal_max = j.get("annualSalaryMax")
+    seen = set()
+    for industry in ["finance", "accounting"]:
+        params = {"count": min(limit, 50), "industry": industry}
+        if search_term:
+            params["tag"] = search_term
+        try:
+            r = requests.get("https://jobicy.com/api/v2/remote-jobs", params=params, timeout=15)
+            r.raise_for_status()
+            jobs = r.json().get("jobs", [])
+            for j in jobs:
+                uid = j.get("id") or j.get("url", "")
+                if uid not in seen:
+                    seen.add(uid)
+                    sal_min = j.get("annualSalaryMin")
+                    sal_max = j.get("annualSalaryMax")
+                    if sal_min and sal_max:
+                        salary = f"${int(sal_min):,} – ${int(sal_max):,}"
+                    elif sal_min:
+                        salary = f"${int(sal_min):,}+"
+                    else:
+                        salary = ""
+                    rows.append({
+                        "Title": j.get("jobTitle", ""),
+                        "Company": j.get("companyName", ""),
+                        "Location": j.get("jobGeo") or "Worldwide",
+                        "Type": j.get("jobType", "").replace("-", " ").title(),
+                        "Salary": salary,
+                        "Posted": str(j.get("pubDate", ""))[:10],
+                        "Source": "Jobicy",
+                        "Apply": j.get("url", ""),
+                    })
+        except Exception:
+            pass
+    return rows
+
+
+def fetch_remoteok(search_term, limit):
+    headers = {"User-Agent": "FinanceJobFinder/1.0"}
+    r = requests.get("https://remoteok.com/api?tags=finance,accounting", timeout=15, headers=headers)
+    r.raise_for_status()
+    data = r.json()
+    jobs = [j for j in data if isinstance(j, dict) and j.get("position")]
+    if search_term:
+        kw = search_term.lower()
+        jobs = [j for j in jobs if kw in j.get("position", "").lower() or kw in " ".join(j.get("tags", [])).lower()]
+    rows = []
+    for j in jobs[:limit]:
+        sal_min = j.get("salary_min")
+        sal_max = j.get("salary_max")
         if sal_min and sal_max:
             salary = f"${int(sal_min):,} – ${int(sal_max):,}"
         elif sal_min:
@@ -80,14 +130,51 @@ def fetch_jobicy(search_term, limit):
         else:
             salary = ""
         rows.append({
-            "Title": j.get("jobTitle", ""),
-            "Company": j.get("companyName", ""),
-            "Location": j.get("jobGeo") or "Worldwide",
-            "Type": j.get("jobType", "").replace("-", " ").title(),
+            "Title": j.get("position", ""),
+            "Company": j.get("company", ""),
+            "Location": j.get("location") or "Worldwide",
+            "Type": "Full Time",
             "Salary": salary,
-            "Posted": str(j.get("pubDate", ""))[:10],
-            "Source": "Jobicy",
+            "Posted": str(j.get("date", ""))[:10],
+            "Source": "RemoteOK",
             "Apply": j.get("url", ""),
+        })
+    return rows
+
+
+def fetch_adzuna(search_term, limit):
+    app_id = st.secrets.get("ADZUNA_APP_ID", "")
+    app_key = st.secrets.get("ADZUNA_APP_KEY", "")
+    if not app_id or not app_key:
+        return []
+    params = {
+        "app_id": app_id,
+        "app_key": app_key,
+        "results_per_page": min(limit, 50),
+        "what": search_term or "finance accounting",
+        "content-type": "application/json",
+    }
+    r = requests.get("https://api.adzuna.com/v1/api/jobs/us/search/1", params=params, timeout=15)
+    r.raise_for_status()
+    jobs = r.json().get("results", [])
+    rows = []
+    for j in jobs:
+        sal = ""
+        sal_min = j.get("salary_min")
+        sal_max = j.get("salary_max")
+        if sal_min and sal_max:
+            sal = f"${int(sal_min):,} – ${int(sal_max):,}"
+        elif sal_min:
+            sal = f"${int(sal_min):,}+"
+        rows.append({
+            "Title": j.get("title", ""),
+            "Company": j.get("company", {}).get("display_name", ""),
+            "Location": j.get("location", {}).get("display_name", "Worldwide"),
+            "Type": j.get("contract_time", "").replace("_", " ").title(),
+            "Salary": sal,
+            "Posted": str(j.get("created", ""))[:10],
+            "Source": "Adzuna",
+            "Apply": j.get("redirect_url", ""),
         })
     return rows
 
@@ -117,24 +204,21 @@ with st.sidebar:
 
 
 if search_btn:
-    with st.spinner("Fetching jobs from all sources..."):
+    with st.spinner("Fetching finance & accounting jobs..."):
         all_rows = []
         errors = []
 
-        try:
-            all_rows.extend(fetch_remotive(search_term, job_type, limit))
-        except Exception as e:
-            errors.append(f"Remotive: {e}")
-
-        try:
-            all_rows.extend(fetch_arbeitnow(search_term, limit))
-        except Exception as e:
-            errors.append(f"Arbeitnow: {e}")
-
-        try:
-            all_rows.extend(fetch_jobicy(search_term, limit))
-        except Exception as e:
-            errors.append(f"Jobicy: {e}")
+        for name, fn, args in [
+            ("Remotive", fetch_remotive, (search_term, job_type, limit)),
+            ("Arbeitnow", fetch_arbeitnow, (search_term, limit)),
+            ("Jobicy", fetch_jobicy, (search_term, limit)),
+            ("RemoteOK", fetch_remoteok, (search_term, limit)),
+            ("Adzuna", fetch_adzuna, (search_term, limit)),
+        ]:
+            try:
+                all_rows.extend(fn(*args))
+            except Exception as e:
+                errors.append(f"{name}: {e}")
 
         for err in errors:
             st.warning(f"Could not fetch from {err}")
@@ -162,7 +246,7 @@ if search_btn:
 
             fc1, fc2, fc3 = st.columns(3)
             with fc1:
-                loc_filter = st.text_input("Filter by Location", placeholder="e.g. USA, Europe, UK")
+                loc_filter = st.text_input("Filter by Location", placeholder="e.g. USA, Pakistan, UK")
             with fc2:
                 company_filter = st.text_input("Filter by Company", placeholder="e.g. Deloitte, KPMG")
             with fc3:

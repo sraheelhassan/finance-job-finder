@@ -8,19 +8,13 @@ st.set_page_config(page_title="Finance Job Finder", page_icon="💼", layout="wi
 st.title("💼 Finance Job Finder")
 st.markdown("Search remote finance jobs across multiple boards — no signup required")
 
-REMOTIVE_CATEGORIES = [
-    "finance-legal", "business", "data", "software-dev", "customer-support",
-    "design", "marketing", "sales", "product", "devops-sysadmin",
-    "hr", "qa", "writing", "all-other"
-]
-
 DAYS_OPTIONS = {"Any time": None, "Last 7 days": 7, "Last 14 days": 14, "Last 30 days": 30}
 
+REMOTIVE_CATEGORY = "finance-legal"
 
-def fetch_remotive(search_term, category, job_type, limit):
-    params = {"limit": limit}
-    if category:
-        params["category"] = category
+
+def fetch_remotive(search_term, job_type, limit):
+    params = {"limit": limit, "category": REMOTIVE_CATEGORY}
     if search_term:
         params["search"] = search_term
     r = requests.get("https://remotive.com/api/remote-jobs", params=params, timeout=15)
@@ -101,11 +95,6 @@ def fetch_jobicy(search_term, limit):
 with st.sidebar:
     st.header("Search Filters")
     search_term = st.text_input("Job Title / Keyword", value="finance manager")
-    category = st.selectbox(
-        "Remotive Category", [""] + REMOTIVE_CATEGORIES,
-        index=1,
-        format_func=lambda x: "All Categories" if x == "" else x.replace("-", " ").title()
-    )
     job_type = st.selectbox(
         "Job Type", ["", "full_time", "part_time", "contract", "freelance"],
         format_func=lambda x: "Any" if x == "" else x.replace("_", " ").title()
@@ -137,7 +126,7 @@ if search_btn:
 
         if use_remotive:
             try:
-                all_rows.extend(fetch_remotive(search_term, category, job_type, limit))
+                all_rows.extend(fetch_remotive(search_term, job_type, limit))
             except Exception as e:
                 errors.append(f"Remotive: {e}")
 

@@ -95,52 +95,46 @@ def fetch_jobicy(search_term, limit):
 with st.sidebar:
     st.header("Search Filters")
     search_term = st.text_input("Job Title / Keyword", value="finance manager")
-    job_type = st.selectbox(
-        "Job Type", ["", "full_time", "part_time", "contract", "freelance"],
-        format_func=lambda x: "Any" if x == "" else x.replace("_", " ").title()
-    )
 
-    st.markdown("---")
-    st.subheader("Job Sources")
-    use_remotive = st.checkbox("Remotive", value=True)
-    use_arbeitnow = st.checkbox("Arbeitnow", value=True)
-    use_jobicy = st.checkbox("Jobicy", value=True)
-    limit = st.slider("Max Results per Source", 10, 100, 30)
+    with st.expander("Job Type"):
+        job_type = st.selectbox(
+            "Job Type", ["", "full_time", "part_time", "contract", "freelance"],
+            format_func=lambda x: "Any" if x == "" else x.replace("_", " ").title(),
+            label_visibility="collapsed"
+        )
 
-    st.markdown("---")
-    st.subheader("Date Posted")
-    days_label = st.selectbox("Posted Within", list(DAYS_OPTIONS.keys()))
-    days_filter = DAYS_OPTIONS[days_label]
+    with st.expander("Max Results"):
+        limit = st.slider("Max Results per Source", 10, 100, 30, label_visibility="collapsed")
 
-    st.markdown("---")
-    st.subheader("Salary")
-    salary_only = st.checkbox("Only jobs with salary listed")
+    with st.expander("Date Posted"):
+        days_label = st.selectbox("Posted Within", list(DAYS_OPTIONS.keys()), label_visibility="collapsed")
+        days_filter = DAYS_OPTIONS[days_label]
+
+    with st.expander("Salary"):
+        salary_only = st.checkbox("Only jobs with salary listed")
 
     search_btn = st.button("Search Jobs", use_container_width=True)
 
 
 if search_btn:
-    with st.spinner("Fetching jobs from selected sources..."):
+    with st.spinner("Fetching jobs from all sources..."):
         all_rows = []
         errors = []
 
-        if use_remotive:
-            try:
-                all_rows.extend(fetch_remotive(search_term, job_type, limit))
-            except Exception as e:
-                errors.append(f"Remotive: {e}")
+        try:
+            all_rows.extend(fetch_remotive(search_term, job_type, limit))
+        except Exception as e:
+            errors.append(f"Remotive: {e}")
 
-        if use_arbeitnow:
-            try:
-                all_rows.extend(fetch_arbeitnow(search_term, limit))
-            except Exception as e:
-                errors.append(f"Arbeitnow: {e}")
+        try:
+            all_rows.extend(fetch_arbeitnow(search_term, limit))
+        except Exception as e:
+            errors.append(f"Arbeitnow: {e}")
 
-        if use_jobicy:
-            try:
-                all_rows.extend(fetch_jobicy(search_term, limit))
-            except Exception as e:
-                errors.append(f"Jobicy: {e}")
+        try:
+            all_rows.extend(fetch_jobicy(search_term, limit))
+        except Exception as e:
+            errors.append(f"Jobicy: {e}")
 
         for err in errors:
             st.warning(f"Could not fetch from {err}")
@@ -162,13 +156,13 @@ if search_btn:
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Jobs", len(df))
             c2.metric("With Salary", (df["Salary"].str.strip() != "").sum())
-            c3.metric("Sources Active", df["Source"].nunique())
+            c3.metric("Sources", df["Source"].nunique())
 
             st.markdown("---")
 
             fc1, fc2, fc3 = st.columns(3)
             with fc1:
-                loc_filter = st.text_input("Filter by Region / Location", placeholder="e.g. USA, Europe, UK")
+                loc_filter = st.text_input("Filter by Location", placeholder="e.g. USA, Europe, UK")
             with fc2:
                 company_filter = st.text_input("Filter by Company", placeholder="e.g. Deloitte, KPMG")
             with fc3:

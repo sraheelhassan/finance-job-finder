@@ -177,15 +177,13 @@ def fetch_adzuna(search_term, limit):
     return rows
 
 
-with st.sidebar:
-    st.header("Search Filters")
-    search_term = st.text_input("Job Title / Keyword", value="finance manager")
-
-    with st.expander("Max Results"):
-        limit = st.slider("Max Results per Source", 10, 100, 30, label_visibility="collapsed")
-
+col_search, col_btn = st.columns([5, 1])
+with col_search:
+    search_term = st.text_input("Job Title / Keyword", placeholder="e.g. CFO, accountant, financial analyst", label_visibility="collapsed")
+with col_btn:
     search_btn = st.button("Search Jobs", use_container_width=True)
 
+limit = 30
 
 if search_btn:
     with st.spinner("Fetching finance & accounting jobs..."):
@@ -248,4 +246,4 @@ if search_btn:
             st.download_button("Download CSV", csv, "finance_jobs.csv", "text/csv", use_container_width=True)
 
 else:
-    st.info("Set your filters in the sidebar and click **Search Jobs** to get started.")
+    st.info("Type a job title or keyword above and click **Search Jobs** to get started.")

@@ -10,6 +10,17 @@ st.markdown("Search remote & freelance finance and accounting jobs — no signup
 
 REMOTIVE_CATEGORIES = ["finance-legal"]
 
+FINANCE_KEYWORDS = [
+    "finance", "financial", "accounting", "accountant", "cfo", "controller",
+    "bookkeeper", "auditor", "tax", "payroll", "budget", "treasury", "analyst",
+    "fp&a", "accounts", "billing", "invoice", "revenue", "compliance", "audit",
+    "actuar", "cpa", "cma", "acca", "ifrs", "gaap", "reconcil", "forecas",
+]
+
+def is_finance_job(title):
+    t = title.lower()
+    return any(kw in t for kw in FINANCE_KEYWORDS)
+
 
 def fetch_remotive(search_term, limit):
     rows = []
@@ -21,6 +32,8 @@ def fetch_remotive(search_term, limit):
         r = requests.get("https://remotive.com/api/remote-jobs", params=params, timeout=15)
         r.raise_for_status()
         for j in r.json().get("jobs", []):
+            if not is_finance_job(j.get("title", "")) and not search_term:
+                continue
             if j.get("id") not in seen:
                 seen.add(j.get("id"))
                 rows.append({
@@ -219,7 +232,10 @@ if search_btn:
         st.warning("No jobs found. Try a different keyword.")
     else:
         df = pd.DataFrame(all_rows)
-        df = df[df["Title"].str.strip() != ""].reset_index(drop=True)
+        df = df[df["Title"].str.strip() != ""]
+        if not search_term:
+            df = df[df["Title"].apply(is_finance_job)]
+        df = df.reset_index(drop=True)
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Total Jobs", len(df))

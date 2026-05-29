@@ -8,7 +8,7 @@ st.set_page_config(page_title="Finance Job Finder", page_icon="💼", layout="wi
 st.title("💼 Accounting & Finance Job Finder")
 st.markdown("Search remote & freelance finance and accounting jobs — no signup required")
 
-REMOTIVE_CATEGORIES = ["finance-legal", "business"]
+REMOTIVE_CATEGORIES = ["finance-legal"]
 
 
 def fetch_remotive(search_term, limit):
@@ -225,24 +225,6 @@ if search_btn:
         c1.metric("Total Jobs", len(df))
         c2.metric("With Salary", (df["Salary"].str.strip() != "").sum())
         c3.metric("Sources", df["Source"].nunique())
-
-        st.markdown("---")
-
-        fc1, fc2, fc3 = st.columns(3)
-        with fc1:
-            loc_filter = st.text_input("Filter by Location", placeholder="e.g. USA, Pakistan, UK")
-        with fc2:
-            company_filter = st.text_input("Filter by Company", placeholder="e.g. Deloitte, KPMG")
-        with fc3:
-            source_options = df["Source"].unique().tolist()
-            source_filter = st.multiselect("Filter by Source", source_options, default=source_options)
-
-        if loc_filter:
-            df = df[df["Location"].str.contains(loc_filter, case=False, na=False)]
-        if company_filter:
-            df = df[df["Company"].str.contains(company_filter, case=False, na=False)]
-        if source_filter:
-            df = df[df["Source"].isin(source_filter)]
 
         st.markdown(f"**Showing {len(df)} results**")
 

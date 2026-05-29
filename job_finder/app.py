@@ -1,14 +1,12 @@
 import streamlit as st
 import pandas as pd
 import requests
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 st.set_page_config(page_title="Finance Job Finder", page_icon="💼", layout="wide")
 
-st.title("💼 Finance Job Finder")
+st.title("💼 Accounting & Finance Job Finder")
 st.markdown("Search remote finance & accounting jobs across multiple boards — no signup required")
-
-DAYS_OPTIONS = {"Any time": None, "Last 7 days": 7, "Last 14 days": 14, "Last 30 days": 30}
 
 REMOTIVE_CATEGORIES = ["finance-legal", "business"]
 
@@ -183,22 +181,8 @@ with st.sidebar:
     st.header("Search Filters")
     search_term = st.text_input("Job Title / Keyword", value="finance manager")
 
-    with st.expander("Job Type"):
-        job_type = st.selectbox(
-            "Job Type", ["", "full_time", "part_time", "contract", "freelance"],
-            format_func=lambda x: "Any" if x == "" else x.replace("_", " ").title(),
-            label_visibility="collapsed"
-        )
-
     with st.expander("Max Results"):
         limit = st.slider("Max Results per Source", 10, 100, 30, label_visibility="collapsed")
-
-    with st.expander("Date Posted"):
-        days_label = st.selectbox("Posted Within", list(DAYS_OPTIONS.keys()), label_visibility="collapsed")
-        days_filter = DAYS_OPTIONS[days_label]
-
-    with st.expander("Salary"):
-        salary_only = st.checkbox("Only jobs with salary listed")
 
     search_btn = st.button("Search Jobs", use_container_width=True)
 
@@ -209,7 +193,7 @@ if search_btn:
         errors = []
 
         for name, fn, args in [
-            ("Remotive", fetch_remotive, (search_term, job_type, limit)),
+            ("Remotive", fetch_remotive, (search_term, "", limit)),
             ("Arbeitnow", fetch_arbeitnow, (search_term, limit)),
             ("Jobicy", fetch_jobicy, (search_term, limit)),
             ("RemoteOK", fetch_remoteok, (search_term, limit)),
@@ -227,15 +211,6 @@ if search_btn:
             st.warning("No jobs found. Try different keywords or filters.")
         else:
             df = pd.DataFrame(all_rows)
-
-            if days_filter:
-                cutoff = (datetime.now(timezone.utc) - timedelta(days=days_filter)).date()
-                df["_posted_dt"] = pd.to_datetime(df["Posted"], errors="coerce").dt.date
-                df = df[df["_posted_dt"].notna() & (df["_posted_dt"] >= cutoff)]
-                df = df.drop(columns=["_posted_dt"])
-
-            if salary_only:
-                df = df[df["Salary"].str.strip() != ""]
 
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Jobs", len(df))

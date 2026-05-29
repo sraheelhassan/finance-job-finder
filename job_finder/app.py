@@ -177,6 +177,33 @@ def fetch_adzuna(search_term, limit):
     return rows
 
 
+def fetch_jooble(search_term, limit):
+    api_key = st.secrets.get("JOOBLE_API_KEY", "")
+    if not api_key:
+        return []
+    payload = {
+        "keywords": search_term or "finance accounting",
+        "location": "",
+        "resultsOnPage": min(limit, 20),
+    }
+    r = requests.post(f"https://jooble.org/api/{api_key}", json=payload, timeout=15)
+    r.raise_for_status()
+    jobs = r.json().get("jobs", [])
+    rows = []
+    for j in jobs:
+        rows.append({
+            "Title": j.get("title", ""),
+            "Company": j.get("company", ""),
+            "Location": j.get("location") or "Worldwide",
+            "Type": j.get("type", "").replace("_", " ").title(),
+            "Salary": j.get("salary", ""),
+            "Posted": str(j.get("updated", ""))[:10],
+            "Source": "Jooble",
+            "Apply": j.get("link", ""),
+        })
+    return rows
+
+
 col_search, col_btn = st.columns([5, 1])
 with col_search:
     search_term = st.text_input("Job Title / Keyword", placeholder="e.g. CFO, accountant, financial analyst", label_visibility="collapsed")
@@ -196,6 +223,7 @@ if search_btn:
             ("Jobicy", fetch_jobicy, (search_term, limit)),
             ("RemoteOK", fetch_remoteok, (search_term, limit)),
             ("Adzuna", fetch_adzuna, (search_term, limit)),
+            ("Jooble", fetch_jooble, (search_term, limit)),
         ]:
             try:
                 all_rows.extend(fn(*args))
